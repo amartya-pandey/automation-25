@@ -98,57 +98,62 @@ def main():
 def upload_and_process_page():
     st.header("📤 Upload Files & Configure Email")
 
-    with st.form("upload_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("📋 Student Data")
-            excel_file = st.file_uploader(
-                "Upload Excel or CSV file with student data",
-                type=['xlsx', 'xls', 'csv'],
-                help="File should contain columns: Name, Email, Year of Study, Branch"
-            )
-            df = None
-            if excel_file:
-                try:
-                    if excel_file.name.lower().endswith('.csv'):
-                        df = pd.read_csv(excel_file)
-                    else:
-                        df = pd.read_excel(excel_file)
-                    st.success(f"✅ File loaded: {len(df)} records found")
-                    with st.expander("Preview Data"):
-                        st.dataframe(df.head())
-                    expected_cols = ['name', 'email', 'year_of_study', 'branch']
-                    df_cols_lower = [col.lower().strip() for col in df.columns]
-                    missing_info = []
-                    for col in expected_cols:
-                        variations = {
-                            'name': ['name', 'student_name', 'full_name'],
-                            'email': ['email', 'email_id', 'email_address'],
-                            'year_of_study': ['year_of_study', 'year', 'academic_year'],
-                            'branch': ['branch', 'department', 'course']
-                        }
-                        if not any(var in df_cols_lower for var in variations[col]):
-                            missing_info.append(f"No column found for '{col}'. Expected variations: {', '.join(variations[col])}")
-                    if missing_info:
-                        st.warning("⚠️ Column validation issues:")
-                        for issue in missing_info:
-                            st.write(f"- {issue}")
-                    else:
-                        st.success("✅ All required columns found!")
-                except Exception as e:
-                    st.error(f"Error reading file: {e}")
-        with col2:
-            st.subheader("📄 Certificate Template (Optional)")
-            template_file = st.file_uploader(
-                "Upload certificate template (PDF)",
-                type=['pdf'],
-                help="Optional: Upload a PDF template. If not provided, a default template will be used."
-            )
-            if template_file:
-                st.success("✅ Template file uploaded")
-            else:
-                st.info("ℹ️ Using default certificate template")
-        st.header("📧 Email Configuration")
+    # File upload section
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📋 Student Data")
+        excel_file = st.file_uploader(
+            "Upload Excel or CSV file with student data",
+            type=['xlsx', 'xls', 'csv'],
+            help="File should contain columns: Name, Email, Year of Study, Branch"
+        )
+        render_btn = st.button("Render Uploaded File", type="secondary")
+        df = None
+        if excel_file and render_btn:
+            try:
+                if excel_file.name.lower().endswith('.csv'):
+                    df = pd.read_csv(excel_file)
+                else:
+                    df = pd.read_excel(excel_file)
+                st.success(f"✅ File loaded: {len(df)} records found")
+                with st.expander("Preview Data"):
+                    st.dataframe(df.head())
+                # Validate columns
+                expected_cols = ['name', 'email', 'year_of_study', 'branch']
+                df_cols_lower = [col.lower().strip() for col in df.columns]
+                missing_info = []
+                for col in expected_cols:
+                    variations = {
+                        'name': ['name', 'student_name', 'full_name'],
+                        'email': ['email', 'email_id', 'email_address'],
+                        'year_of_study': ['year_of_study', 'year', 'academic_year'],
+                        'branch': ['branch', 'department', 'course']
+                    }
+                    if not any(var in df_cols_lower for var in variations[col]):
+                        missing_info.append(f"No column found for '{col}'. Expected variations: {', '.join(variations[col])}")
+                if missing_info:
+                    st.warning("⚠️ Column validation issues:")
+                    for issue in missing_info:
+                        st.write(f"- {issue}")
+                else:
+                    st.success("✅ All required columns found!")
+            except Exception as e:
+                st.error(f"Error reading file: {e}")
+    with col2:
+        st.subheader("📄 Certificate Template (Optional)")
+        template_file = st.file_uploader(
+            "Upload certificate template (PDF)",
+            type=['pdf'],
+            help="Optional: Upload a PDF template. If not provided, a default template will be used."
+        )
+        if template_file:
+            st.success("✅ Template file uploaded")
+        else:
+            st.info("ℹ️ Using default certificate template")
+
+    # Email configuration and processing inside a form
+    st.header("📧 Email Configuration")
+    with st.form("process_form"):
         with st.expander("Email Settings", expanded=True):
             col1, col2 = st.columns(2)
             with col1:

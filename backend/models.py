@@ -14,6 +14,7 @@ class ProcessingStatus(BaseModel):
     processed_count: int = 0
     total_count: int = 0
     timestamp: datetime = datetime.now()
+    results: Optional[dict] = None  # Added to store summary/results
 
 class EmailConfig(BaseModel):
     smtp_server: str = "smtp.gmail.com"

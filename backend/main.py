@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 import os
 import logging
 from typing import Optional, Dict
@@ -37,25 +37,6 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now()}
-
-@app.get("/upload-form", response_class=HTMLResponse, tags=["Frontend"])
-def upload_form():
-    """HTML form for uploading student data and certificate template."""
-    return """
-    <html>
-        <head><title>Upload Files</title></head>
-        <body>
-            <h2>Upload Student Data and Certificate Template</h2>
-            <form action="/upload-files" method="post" enctype="multipart/form-data">
-                <label>Student Data (Excel/CSV):</label><br>
-                <input type="file" name="excel_file" accept=".xlsx,.xls,.csv"><br><br>
-                <label>Certificate Template (PDF, optional):</label><br>
-                <input type="file" name="template_file" accept=".pdf"><br><br>
-                <input type="submit" value="Upload">
-            </form>
-        </body>
-    </html>
-    """
 
 @app.post("/upload-files", tags=["Upload"])
 async def upload_files(
