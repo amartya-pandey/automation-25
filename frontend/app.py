@@ -19,9 +19,9 @@ API_BASE_URL = "http://localhost:8000"
 def upload_files(excel_file, template_file=None):
     """Upload files to the backend."""
     try:
-        files = {"excel_file": excel_file}
+        files = {"excel_file": (excel_file.name, excel_file, "application/octet-stream")}
         if template_file:
-            files["template_file"] = template_file
+            files["template_file"] = (template_file.name, template_file, "application/pdf")
         
         response = requests.post(f"{API_BASE_URL}/upload-files", files=files)
         response.raise_for_status()
@@ -97,142 +97,120 @@ def main():
 
 def upload_and_process_page():
     st.header("📤 Upload Files & Configure Email")
-    
-    # File upload section
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("📋 Student Data")
-        excel_file = st.file_uploader(
-            "Upload Excel file with student data",
-            type=['xlsx', 'xls'],
-            help="Excel file should contain columns: Name, Email, Year of Study, Branch"
-        )
-        
-        if excel_file:
-            try:
-                df = pd.read_excel(excel_file)
-                st.success(f"✅ Excel file loaded: {len(df)} records found")
-                
-                # Preview data
-                with st.expander("Preview Data"):
-                    st.dataframe(df.head())
-                    
-                # Validate columns
-                expected_cols = ['name', 'email', 'year_of_study', 'branch']
-                df_cols_lower = [col.lower().strip() for col in df.columns]
-                
-                missing_info = []
-                for col in expected_cols:
-                    variations = {
-                        'name': ['name', 'student_name', 'full_name'],
-                        'email': ['email', 'email_id', 'email_address'],
-                        'year_of_study': ['year_of_study', 'year', 'academic_year'],
-                        'branch': ['branch', 'department', 'course']
-                    }
-                    
-                    if not any(var in df_cols_lower for var in variations[col]):
-                        missing_info.append(f"No column found for '{col}'. Expected variations: {', '.join(variations[col])}")
-                
-                if missing_info:
-                    st.warning("⚠️ Column validation issues:")
-                    for issue in missing_info:
-                        st.write(f"- {issue}")
-                else:
-                    st.success("✅ All required columns found!")
-                    
-            except Exception as e:
-                st.error(f"Error reading Excel file: {e}")
-    
-    with col2:
-        st.subheader("📄 Certificate Template (Optional)")
-        template_file = st.file_uploader(
-            "Upload certificate template (PDF)",
-            type=['pdf'],
-            help="Optional: Upload a PDF template. If not provided, a default template will be used."
-        )
-        
-        if template_file:
-            st.success("✅ Template file uploaded")
-        else:
-            st.info("ℹ️ Using default certificate template")
-    
-    # Email configuration
-    st.header("📧 Email Configuration")
-    
-    with st.expander("Email Settings", expanded=True):
+
+    with st.form("upload_form"):
         col1, col2 = st.columns(2)
-        
         with col1:
-            sender_email = st.text_input(
-                "Sender Email Address",
-                placeholder="your-email@gmail.com",
-                help="Email address that will send the certificates"
+            st.subheader("📋 Student Data")
+            excel_file = st.file_uploader(
+                "Upload Excel or CSV file with student data",
+                type=['xlsx', 'xls', 'csv'],
+                help="File should contain columns: Name, Email, Year of Study, Branch"
             )
-            sender_password = st.text_input(
-                "Email Password",
-                type="password",
-                help="For Gmail, use App Password instead of regular password"
-            )
-            smtp_server = st.text_input("SMTP Server", value="smtp.gmail.com")
-            smtp_port = st.number_input("SMTP Port", value=587)
-        
+            df = None
+            if excel_file:
+                try:
+                    if excel_file.name.lower().endswith('.csv'):
+                        df = pd.read_csv(excel_file)
+                    else:
+                        df = pd.read_excel(excel_file)
+                    st.success(f"✅ File loaded: {len(df)} records found")
+                    with st.expander("Preview Data"):
+                        st.dataframe(df.head())
+                    expected_cols = ['name', 'email', 'year_of_study', 'branch']
+                    df_cols_lower = [col.lower().strip() for col in df.columns]
+                    missing_info = []
+                    for col in expected_cols:
+                        variations = {
+                            'name': ['name', 'student_name', 'full_name'],
+                            'email': ['email', 'email_id', 'email_address'],
+                            'year_of_study': ['year_of_study', 'year', 'academic_year'],
+                            'branch': ['branch', 'department', 'course']
+                        }
+                        if not any(var in df_cols_lower for var in variations[col]):
+                            missing_info.append(f"No column found for '{col}'. Expected variations: {', '.join(variations[col])}")
+                    if missing_info:
+                        st.warning("⚠️ Column validation issues:")
+                        for issue in missing_info:
+                            st.write(f"- {issue}")
+                    else:
+                        st.success("✅ All required columns found!")
+                except Exception as e:
+                    st.error(f"Error reading file: {e}")
         with col2:
-            email_subject = st.text_input(
-                "Email Subject",
-                value="Your Certificate",
-                help="Subject line for the certificate emails"
+            st.subheader("📄 Certificate Template (Optional)")
+            template_file = st.file_uploader(
+                "Upload certificate template (PDF)",
+                type=['pdf'],
+                help="Optional: Upload a PDF template. If not provided, a default template will be used."
             )
-            email_body = st.text_area(
-                "Email Body Template",
-                value="Dear {name},\n\nCongratulations! Please find your certificate for {branch} ({year_of_study}) attached.\n\nBest regards,\nCertificate Team",
-                help="Use {name}, {branch}, {year_of_study} as placeholders",
-                height=150
-            )
-    
-    # Process button
-    st.header("🚀 Start Processing")
-    
-    if st.button("Generate & Send Certificates", type="primary", use_container_width=True):
-        if not excel_file:
-            st.error("Please upload an Excel file")
-            return
-        
-        if not sender_email or not sender_password:
-            st.error("Please provide email credentials")
-            return
-        
-        with st.spinner("Uploading files..."):
-            # Upload files
-            upload_result = upload_files(excel_file, template_file)
-            
-            if upload_result:
-                task_id = upload_result['task_id']
-                st.success(f"Files uploaded successfully! Task ID: {task_id}")
-                
-                # Store task ID in session state
-                st.session_state['current_task_id'] = task_id
-                
-                # Start processing
-                email_config = {
-                    "sender_email": sender_email,
-                    "sender_password": sender_password,
-                    "email_subject": email_subject,
-                    "email_body": email_body,
-                    "smtp_server": smtp_server,
-                    "smtp_port": smtp_port
-                }
-                
-                with st.spinner("Starting certificate generation..."):
-                    process_result = start_processing(task_id, email_config)
-                    
-                    if process_result:
-                        st.success("Processing started! Check the status in the 'View Status' page.")
-                        st.info(f"Task ID: {task_id}")
-                        
-                        # Auto-switch to status page
-                        time.sleep(2)
-                        st.rerun()
+            if template_file:
+                st.success("✅ Template file uploaded")
+            else:
+                st.info("ℹ️ Using default certificate template")
+        st.header("📧 Email Configuration")
+        with st.expander("Email Settings", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                sender_email = st.text_input(
+                    "Sender Email Address",
+                    placeholder="your-email@gmail.com",
+                    help="Email address that will send the certificates"
+                )
+                sender_password = st.text_input(
+                    "Email Password",
+                    type="password",
+                    help="For Gmail, use App Password instead of regular password"
+                )
+                smtp_server = st.text_input("SMTP Server", value="smtp.gmail.com")
+                smtp_port = st.number_input("SMTP Port", value=587)
+            with col2:
+                email_subject = st.text_input(
+                    "Email Subject",
+                    value="Your Certificate",
+                    help="Subject line for the certificate emails"
+                )
+                email_body = st.text_area(
+                    "Email Body Template",
+                    value="Dear {name},\n\nCongratulations! Please find your certificate for {branch} ({year_of_study}) attached.\n\nBest regards,\nCertificate Team",
+                    help="Use {name}, {branch}, {year_of_study} as placeholders",
+                    height=150
+                )
+        st.header("🚀 Start Processing")
+        submit_btn = st.form_submit_button("Generate & Send Certificates")
+        if submit_btn:
+            if not excel_file:
+                st.error("Please upload an Excel or CSV file")
+                return
+            if not sender_email or not sender_password:
+                st.error("Please provide email credentials")
+                return
+            # Reset file pointers before upload
+            if excel_file:
+                excel_file.seek(0)
+            if template_file:
+                template_file.seek(0)
+            with st.spinner("Uploading files..."):
+                upload_result = upload_files(excel_file, template_file)
+                if upload_result:
+                    task_id = upload_result['task_id']
+                    st.success(f"Files uploaded successfully! Task ID: {task_id}")
+                    st.session_state['current_task_id'] = task_id
+                    email_config = {
+                        "sender_email": sender_email,
+                        "sender_password": sender_password,
+                        "email_subject": email_subject,
+                        "email_body": email_body,
+                        "smtp_server": smtp_server,
+                        "smtp_port": smtp_port
+                    }
+                    with st.spinner("Starting certificate generation..."):
+                        process_result = start_processing(task_id, email_config)
+                        if process_result:
+                            st.success("Processing started! Check the status in the 'View Status' page.")
+                            st.info(f"Task ID: {task_id}")
+                            time.sleep(2)
+                            st.rerun()
 
 def view_status_page():
     st.header("📊 Processing Status")
@@ -323,8 +301,8 @@ def help_page():
     st.markdown("""
     ## How to Use Auto-Certy
     
-    ### 1. Prepare Your Excel File
-    Your Excel file should contain the following columns (case-insensitive):
+    ### 1. Prepare Your Data File
+    Your Excel (.xlsx, .xls) or CSV (.csv) file should contain the following columns (case-insensitive):
     - **Name** (or Student_Name, Full_Name)
     - **Email** (or Email_ID, Email_Address)  
     - **Year_of_Study** (or Year, Academic_Year)
@@ -342,7 +320,7 @@ def help_page():
     - Templates should be designed to accommodate variable text
     
     ### 4. Processing Steps
-    1. Upload your Excel file and optional template
+    1. Upload your Excel/CSV file and optional template
     2. Configure email settings
     3. Click "Generate & Send Certificates"
     4. Monitor progress in the "View Status" page
@@ -351,7 +329,7 @@ def help_page():
     ### 5. Troubleshooting
     - **Backend Connection Error**: Ensure FastAPI server is running (`uvicorn main:app --reload`)
     - **Email Authentication Error**: Check email credentials and app password
-    - **File Format Error**: Ensure Excel file is .xlsx or .xls format
+    - **File Format Error**: Ensure file is .xlsx, .xls, or .csv format
     - **Column Not Found**: Check that your Excel columns match expected names
     
     ### 6. Security Notes
@@ -360,7 +338,7 @@ def help_page():
     - Use app passwords for better security
     """)
     
-    st.subheader("📋 Sample Excel Format")
+    st.subheader("📋 Sample File Format")
     sample_data = {
         'Name': ['John Doe', 'Jane Smith', 'Mike Johnson'],
         'Email': ['john@example.com', 'jane@example.com', 'mike@example.com'],

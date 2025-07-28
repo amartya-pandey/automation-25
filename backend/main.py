@@ -1,15 +1,16 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 import os
-import aiofiles
 import logging
-from typing import List, Dict, Optional
+from typing import Optional, Dict
 from datetime import datetime
 import uuid
 from models import ProcessingStatus, EmailConfig
 from certificate import CertificateGenerator
 from emailer import EmailSender
+from config import UPLOAD_DIR
+from utils import validate_excel_file, read_and_save_file, http_error
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -28,8 +29,6 @@ app.add_middleware(
 
 # In-memory storage for processing status (use Redis/DB in production)
 processing_status = {}
-upload_dir = "../uploads"
-os.makedirs(upload_dir, exist_ok=True)
 
 @app.get("/")
 async def root():
@@ -39,40 +38,49 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now()}
 
-@app.post("/upload-files")
+@app.get("/upload-form", response_class=HTMLResponse, tags=["Frontend"])
+def upload_form():
+    """HTML form for uploading student data and certificate template."""
+    return """
+    <html>
+        <head><title>Upload Files</title></head>
+        <body>
+            <h2>Upload Student Data and Certificate Template</h2>
+            <form action="/upload-files" method="post" enctype="multipart/form-data">
+                <label>Student Data (Excel/CSV):</label><br>
+                <input type="file" name="excel_file" accept=".xlsx,.xls,.csv"><br><br>
+                <label>Certificate Template (PDF, optional):</label><br>
+                <input type="file" name="template_file" accept=".pdf"><br><br>
+                <input type="submit" value="Upload">
+            </form>
+        </body>
+    </html>
+    """
+
+@app.post("/upload-files", tags=["Upload"])
 async def upload_files(
     excel_file: UploadFile = File(...),
     template_file: Optional[UploadFile] = File(None)
-):
-    """Upload Excel file and optional template file."""
+) -> Dict:
+    """
+    Upload Excel/CSV file and optional PDF template file.
+    Returns a task_id and file info.
+    """
     try:
-        # Validate file types
-        if not excel_file.filename or not excel_file.filename.endswith(('.xlsx', '.xls')):
-            raise HTTPException(status_code=400, detail="Excel file must be .xlsx or .xls format")
-        
-        if template_file and template_file.filename and not template_file.filename.endswith('.pdf'):
-            raise HTTPException(status_code=400, detail="Template file must be PDF format")
-        
-        # Generate unique task ID
+        # Validate Excel file
+        validate_excel_file(excel_file)
         task_id = str(uuid.uuid4())
-        
-        # Save Excel file
         excel_filename = excel_file.filename or "unknown_file.xlsx"
-        excel_path = os.path.join(upload_dir, f"{task_id}_{excel_filename}")
-        async with aiofiles.open(excel_path, 'wb') as f:
-            content = await excel_file.read()
-            await f.write(content)
-        
-        # Save template file if provided
-        template_path = None
+        excel_path = os.path.join(UPLOAD_DIR, f"{task_id}_{excel_filename}")
+        await read_and_save_file(excel_file, excel_path)
+        # Handle template file
         template_filename = None
         if template_file and template_file.filename:
+            if not template_file.filename.endswith('.pdf'):
+                raise http_error(400, "Template file must be PDF format.")
+            template_path = os.path.join(UPLOAD_DIR, f"{task_id}_{template_file.filename}")
+            await read_and_save_file(template_file, template_path)
             template_filename = template_file.filename
-            template_path = os.path.join(upload_dir, f"{task_id}_{template_filename}")
-            async with aiofiles.open(template_path, 'wb') as f:
-                content = await template_file.read()
-                await f.write(content)
-        
         # Initialize processing status
         processing_status[task_id] = ProcessingStatus(
             status="uploaded",
@@ -80,17 +88,17 @@ async def upload_files(
             processed_count=0,
             total_count=0
         )
-        
         return {
             "task_id": task_id,
             "message": "Files uploaded successfully",
-            "excel_file": excel_file.filename or "unknown_file.xlsx",
+            "excel_file": excel_filename,
             "template_file": template_filename
         }
-        
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"Error uploading files: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise http_error(500, "Internal server error: " + str(e))
 
 @app.post("/process-certificates")
 async def process_certificates(
@@ -143,19 +151,19 @@ async def process_certificates_background(task_id: str, email_config: EmailConfi
     """Background task to process certificates and send emails."""
     try:
         # Find uploaded files
-        excel_files = [f for f in os.listdir(upload_dir) if f.startswith(task_id) and f.endswith(('.xlsx', '.xls'))]
+        excel_files = [f for f in os.listdir(UPLOAD_DIR) if f.startswith(task_id) and f.endswith(('.xlsx', '.xls', '.csv'))]
         if not excel_files:
             processing_status[task_id].status = "error"
-            processing_status[task_id].message = "Excel file not found"
+            processing_status[task_id].message = "Excel/CSV file not found"
             return
         
-        excel_path = os.path.join(upload_dir, excel_files[0])
+        excel_path = os.path.join(UPLOAD_DIR, excel_files[0])
         
         # Initialize certificate generator
         cert_generator = CertificateGenerator()
         
-        # Parse Excel file
-        processing_status[task_id].message = "Parsing Excel file..."
+        # Parse Excel/CSV file
+        processing_status[task_id].message = "Parsing data file..."
         students = cert_generator.parse_excel(excel_path)
         processing_status[task_id].total_count = len(students)
         
@@ -233,9 +241,9 @@ async def cleanup_task(task_id: str):
             del processing_status[task_id]
         
         # Clean up uploaded files
-        for filename in os.listdir(upload_dir):
+        for filename in os.listdir(UPLOAD_DIR):
             if filename.startswith(task_id):
-                os.remove(os.path.join(upload_dir, filename))
+                os.remove(os.path.join(UPLOAD_DIR, filename))
         
         # Clean up generated certificates
         cert_dir = "../generated_certificates"

@@ -3,25 +3,53 @@ import pandas as pd
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
-from PIL import Image as PILImage
 from typing import Dict, List
 import logging
+from fastapi import FastAPI
+from reportlab.lib import colors
 
 logger = logging.getLogger(__name__)
 
 class CertificateGenerator:
-    def __init__(self, template_path: str = None):
+    def __init__(self, template_path: str = ''):
         self.template_path = template_path
         self.output_dir = "../generated_certificates"
         os.makedirs(self.output_dir, exist_ok=True)
     
     def parse_excel(self, excel_path: str) -> List[Dict]:
-        """Parse Excel file and return list of student records."""
+        """Parse Excel or CSV file and return list of student records."""
         try:
-            df = pd.read_excel(excel_path)
+            logger.info(f"Attempting to parse file: {excel_path}")
+            
+            # Check if file exists and get basic info
+            if not os.path.exists(excel_path):
+                raise FileNotFoundError(f"File not found: {excel_path}")
+            
+            file_size = os.path.getsize(excel_path)
+            logger.info(f"File size: {file_size} bytes")
+            
+            # Determine file type and read accordingly
+            if excel_path.lower().endswith('.csv'):
+                logger.info("Reading as CSV file")
+                df = pd.read_csv(excel_path)
+            else:
+                logger.info("Reading as Excel file")
+                # For Excel files, try different engines if one fails
+                try:
+                    df = pd.read_excel(excel_path, engine='openpyxl')
+                except Exception as openpyxl_error:
+                    logger.error(f"Failed with openpyxl engine: {openpyxl_error}")
+                    try:
+                        df = pd.read_excel(excel_path, engine='xlrd')
+                    except Exception as xlrd_error:
+                        logger.error(f"Failed with xlrd engine: {xlrd_error}")
+                        # If it's truly corrupted, raise a clear error
+                        raise ValueError(f"Cannot read Excel file. File may be corrupted. Original errors: openpyxl: {openpyxl_error}, xlrd: {xlrd_error}")
+            
+            logger.info(f"Successfully read file with {len(df)} rows and {len(df.columns)} columns")
             
             # Normalize column names (handle variations)
             column_mapping = {
@@ -79,7 +107,7 @@ class CertificateGenerator:
                 fontSize=24,
                 spaceAfter=30,
                 alignment=TA_CENTER,
-                textColor='darkblue'
+                textColor=colors.darkblue
             )
             
             subtitle_style = ParagraphStyle(
@@ -158,3 +186,5 @@ class CertificateGenerator:
                 continue
         
         return generated_files
+
+app = FastAPI()
