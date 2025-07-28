@@ -51,28 +51,27 @@ class CertificateGenerator:
             
             logger.info(f"Successfully read file with {len(df)} rows and {len(df.columns)} columns")
             
-            # Normalize column names (handle variations)
+            # Normalize column names (handle variations and formatting)
+            df.columns = [col.lower().replace(" ", "_").strip() for col in df.columns]
             column_mapping = {
                 'name': ['name', 'student_name', 'full_name'],
                 'email': ['email', 'email_id', 'email_address'],
                 'year_of_study': ['year_of_study', 'year', 'academic_year'],
                 'branch': ['branch', 'department', 'course']
             }
-            
             normalized_columns = {}
             for standard_name, variations in column_mapping.items():
                 for col in df.columns:
-                    if col.lower().strip() in [v.lower() for v in variations]:
+                    if col in [v.lower().replace(" ", "_").strip() for v in variations]:
                         normalized_columns[col] = standard_name
                         break
-            
             df = df.rename(columns=normalized_columns)
             
             # Validate required columns
             required_cols = ['name', 'email', 'year_of_study', 'branch']
             missing_cols = [col for col in required_cols if col not in df.columns]
             if missing_cols:
-                raise ValueError(f"Missing required columns: {missing_cols}")
+                raise ValueError(f"Missing required columns: {missing_cols}. Accepted variations: {column_mapping}")
             
             # Convert to list of dictionaries
             students = df[required_cols].to_dict('records')

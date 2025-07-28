@@ -22,11 +22,17 @@ class EmailSender:
             msg['To'] = student_data['email']
             msg['Subject'] = self.config.subject
             
+            # Check for required keys before formatting email body
+            required_keys = ['name', 'email', 'branch', 'year_of_study']
+            missing_keys = [k for k in required_keys if k not in student_data]
+            if missing_keys:
+                logger.error(f"Student record missing keys: {missing_keys}. Data: {student_data}")
+                return False
             # Email body
             body = self.config.body_template.format(
-                name=student_data['name'],
-                branch=student_data['branch'],
-                year=student_data['year_of_study']
+                name=student_data.get('name', 'N/A'),
+                branch=student_data.get('branch', 'N/A'),
+                year=student_data.get('year_of_study', 'N/A')
             )
             msg.attach(MIMEText(body, 'plain'))
             
