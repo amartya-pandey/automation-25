@@ -47,25 +47,28 @@ async def upload_files(
     """Upload Excel file and optional template file."""
     try:
         # Validate file types
-        if not excel_file.filename.endswith(('.xlsx', '.xls')):
+        if not excel_file.filename or not excel_file.filename.endswith(('.xlsx', '.xls')):
             raise HTTPException(status_code=400, detail="Excel file must be .xlsx or .xls format")
         
-        if template_file and not template_file.filename.endswith('.pdf'):
+        if template_file and template_file.filename and not template_file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Template file must be PDF format")
         
         # Generate unique task ID
         task_id = str(uuid.uuid4())
         
         # Save Excel file
-        excel_path = os.path.join(upload_dir, f"{task_id}_{excel_file.filename}")
+        excel_filename = excel_file.filename or "unknown_file.xlsx"
+        excel_path = os.path.join(upload_dir, f"{task_id}_{excel_filename}")
         async with aiofiles.open(excel_path, 'wb') as f:
             content = await excel_file.read()
             await f.write(content)
         
         # Save template file if provided
         template_path = None
-        if template_file:
-            template_path = os.path.join(upload_dir, f"{task_id}_{template_file.filename}")
+        template_filename = None
+        if template_file and template_file.filename:
+            template_filename = template_file.filename
+            template_path = os.path.join(upload_dir, f"{task_id}_{template_filename}")
             async with aiofiles.open(template_path, 'wb') as f:
                 content = await template_file.read()
                 await f.write(content)
@@ -81,8 +84,8 @@ async def upload_files(
         return {
             "task_id": task_id,
             "message": "Files uploaded successfully",
-            "excel_file": excel_file.filename,
-            "template_file": template_file.filename if template_file else None
+            "excel_file": excel_file.filename or "unknown_file.xlsx",
+            "template_file": template_filename
         }
         
     except Exception as e:
