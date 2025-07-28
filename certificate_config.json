@@ -1,0 +1,33 @@
+{
+  "fields": {
+    "name": {
+      "x": 505,
+      "y": 352,
+      "font": "Helvetica-Bold",
+      "size": 18,
+      "color": "#000000"
+    },
+    "branch": {
+      "x": 505,
+      "y": 278,
+      "font": "Helvetica",
+      "size": 18,
+      "color": "#000000"
+    },
+    "year_of_study": {
+      "x": 505,
+      "y": 238,
+      "font": "Helvetica",
+      "size": 14,
+      "color": "#aa1111"
+    }
+  },
+  "title": {
+    "x": 300,
+    "y": 500,
+    "font": "Helvetica-Bold",
+    "size": 24,
+    "color": "#000000"
+  },
+  "template_path": "backend/template.pdf"
+}
