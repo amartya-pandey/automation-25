@@ -4,9 +4,10 @@ Utility functions for file handling, validation, and error responses.
 import os
 from fastapi import UploadFile, HTTPException
 from typing import Optional
-import logging
+from backend.logger import get_logger
 
-logger = logging.getLogger("main")
+# I'm importing the logger so can use it throughout this file.
+logger = get_logger()
 
 # File validation
 
@@ -22,6 +23,7 @@ async def read_and_save_file(file: UploadFile, path: str) -> int:
         raise http_error(400, f"Uploaded file {file.filename} is empty.")
     with open(path, 'wb') as f:
         f.write(content)
+    # Whenever need to log something, just use logger.info or logger.error and I'll handle the rest.
     logger.info(f"Saved file: {path} ({len(content)} bytes)")
     return len(content)
 

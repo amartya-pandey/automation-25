@@ -2,7 +2,6 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
-import logging
 from typing import Optional, Dict
 from datetime import datetime
 import uuid
@@ -11,17 +10,21 @@ from certificate import CertificateGenerator
 from emailer import EmailSender
 from config import UPLOAD_DIR
 from utils import validate_excel_file, read_and_save_file, http_error
+import dotenv
+from backend.logger import get_logger
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+dotenv.load_dotenv()
+
+# I'm importing the logger so you can use it throughout this file.
+# Whenever you need to log something, just use logger.info or logger.error and I'll handle the rest.
+logger = get_logger()
 
 app = FastAPI(title="Auto-Certy API", description="Automated Certificate Generator and Mailer", version="1.0.0")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=["*"],  # specify frontend when deploying
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,8 +88,8 @@ async def upload_files(
 async def process_certificates(
     background_tasks: BackgroundTasks,
     task_id: str = Form(...),
-    sender_email: str = Form(...),
-    sender_password: str = Form(...),
+    sender_email_in: str = Form(...),
+    sender_password_in: str = Form(...),
     email_subject: str = Form("Your Certificate"),
     email_body: str = Form("Dear {name},\n\nPlease find your certificate attached.\n\nBest regards,\nCertificate Team"),
     smtp_server: str = Form("smtp.gmail.com"),
@@ -103,8 +106,8 @@ async def process_certificates(
         
         # Create email configuration
         email_config = EmailConfig(
-            sender_email=sender_email,
-            sender_password=sender_password,
+            sender_email=sender_email_in,
+            sender_password=sender_password_in,
             subject=email_subject,
             body_template=email_body,
             smtp_server=smtp_server,
@@ -145,7 +148,7 @@ async def process_certificates_background(task_id: str, email_config: EmailConfi
         
         # Parse Excel/CSV file
         processing_status[task_id].message = "Parsing data file..."
-        students = cert_generator.parse_excel(excel_path)
+        students = cert_generator.parse_excel_csv(excel_path)
         processing_status[task_id].total_count = len(students)
         
         # Generate certificates
@@ -162,7 +165,7 @@ async def process_certificates_background(task_id: str, email_config: EmailConfi
         # Test email connection first
         if not email_sender.test_email_connection():
             processing_status[task_id].status = "error"
-            processing_status[task_id].message = "Email connection failed. Please check your credentials."
+            processing_status[task_id].message = "Email connection failed. Please check  credentials."
             return
         
         # Send bulk emails

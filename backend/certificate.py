@@ -7,21 +7,21 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 from typing import Dict, List
-import logging
 from fastapi import FastAPI
 from reportlab.lib import colors
-from pdfrw import PdfReader, PdfWriter, PageMerge
-import json
+import datetime
+from backend.logger import get_logger
 
-logger = logging.getLogger(__name__)
+# I'm importing the logger so can use it throughout this file.
+logger = get_logger()
 
 class CertificateGenerator:
-    def __init__(self, template_path: str = ''):
+    def __init__(self, template_path: str = r'./'):
         self.template_path = template_path
         self.output_dir = "../generated_certificates"
         os.makedirs(self.output_dir, exist_ok=True)
     
-    def parse_excel(self, excel_path: str) -> List[Dict]:
+    def parse_excel_csv(self, excel_path: str) -> List[Dict]:
         """Parse Excel or CSV file and return list of student records."""
         try:
             logger.info(f"Attempting to parse file: {excel_path}")
@@ -93,70 +93,99 @@ class CertificateGenerator:
             logger.error(f"Error parsing Excel file: {e}")
             raise
     
-    def load_config(self, config_path: str = "certificate_config.json") -> dict:
-        """Load certificate layout config from JSON file."""
+    def generate_certificate_pdf(self, student_data: Dict, output_path: str) -> str:
+        """Generate a certificate PDF for a single student."""
         try:
-            with open(config_path, "r") as f:
-                config = json.load(f)
-            return config
-        except Exception as e:
-            logger.error(f"Error loading config: {e}")
-            raise
-
-    def preview_certificate(self, student_data: Dict, config: dict, output_path: str) -> str:
-        """Generate a preview certificate using config settings."""
-        try:
-            template_path = config.get("template_path", self.template_path or "template.pdf")
-            template_pdf = PdfReader(template_path)
-            temp_pdf_path = output_path + ".temp.pdf"
-            c = canvas.Canvas(temp_pdf_path, pagesize=A4)
-            # Draw title
-            title_cfg = config.get("title", {})
-            c.setFont(title_cfg.get("font", "Helvetica-Bold"), title_cfg.get("size", 24))
-            c.setFillColor(title_cfg.get("color", "#000000"))
-            c.drawCentredString(title_cfg.get("x", 300), title_cfg.get("y", 500), "CERTIFICATE OF COMPLETION")
-            # Draw fields
-            for field, cfg in config.get("fields", {}).items():
-                value = student_data.get(field, "")
-                c.setFont(cfg.get("font", "Helvetica"), cfg.get("size", 14))
-                c.setFillColor(cfg.get("color", "#000000"))
-                c.drawCentredString(cfg.get("x", 300), cfg.get("y", 400), value)
-            c.save()
-            overlay_pdf = PdfReader(temp_pdf_path)
-            for page, overlay_page in zip(template_pdf.pages, overlay_pdf.pages):
-                merger = PageMerge(page)
-                merger.add(overlay_page).render()
-            PdfWriter(output_path, trailer=template_pdf).write()
-            os.remove(temp_pdf_path)
-            logger.info(f"Preview certificate generated for {student_data['name']}")
+            # Create PDF document
+            doc = SimpleDocTemplate(output_path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            # Custom styles
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                spaceAfter=30,
+                alignment=TA_CENTER,
+                textColor=colors.darkblue
+            )
+            
+            subtitle_style = ParagraphStyle(
+                'CustomSubtitle',
+                parent=styles['Heading2'],
+                fontSize=18,
+                spaceAfter=20,
+                alignment=TA_CENTER
+            )
+            
+            content_style = ParagraphStyle(
+                'CustomContent',
+                parent=styles['Normal'],
+                fontSize=14,
+                spaceAfter=15,
+                alignment=TA_CENTER
+            )
+            
+            # Certificate content
+            story.append(Spacer(1, 50))
+            story.append(Paragraph("CERTIFICATE OF COMPLETION", title_style))
+            story.append(Spacer(1, 30))
+            
+            story.append(Paragraph("This is to certify that", content_style))
+            story.append(Spacer(1, 20))
+            
+            story.append(Paragraph(f"<b>{student_data['name']}</b>", subtitle_style))
+            story.append(Spacer(1, 20))
+            
+            story.append(Paragraph(
+                f"has successfully completed the seminar on AI/ML <b>{student_data['branch']}</b>",
+                content_style
+            ))
+            story.append(Spacer(1, 15))
+            
+            story.append(Paragraph(
+                f"in the year <b>{student_data['year_of_study']}</b>",
+                content_style
+            ))
+            story.append(Spacer(1, 40))
+            
+            story.append(Paragraph("Congratulations on this achievement!", content_style))
+            story.append(Spacer(1, 60))
+            
+            # Signature section
+            story.append(Paragraph("_____________________", content_style))
+            story.append(Paragraph("Authorized Signature", content_style))
+            
+            # Build PDF
+            doc.build(story)
+            
+            logger.info(f"Certificate generated for {student_data['name']}")
             return output_path
-        except Exception as e:
-            logger.error(f"Error generating preview: {e}")
-            raise
-
-    def generate_certificate_pdf(self, student_data: Dict, output_path: str, config_path: str = "certificate_config.json") -> str:
-        """Generate a certificate PDF for a single student using config layout."""
-        try:
-            config = self.load_config(config_path)
-            return self.preview_certificate(student_data, config, output_path)
+            
         except Exception as e:
             logger.error(f"Error generating certificate for {student_data['name']}: {e}")
             raise
-
-    def generate_all_certificates(self, students: List[Dict], config_path: str = "certificate_config.json") -> List[str]:
-        """Generate certificates for all students using config layout."""
+    
+    def generate_all_certificates(self, students: List[Dict]) -> List[str]:
+        """Generate certificates for all students."""
         generated_files = []
-        config = self.load_config(config_path)
+        
         for i, student in enumerate(students):
             try:
+                # Create filename
                 safe_name = "".join(c for c in student['name'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
                 filename = f"certificate_{safe_name}_{i+1}.pdf"
                 output_path = os.path.join(self.output_dir, filename)
-                self.preview_certificate(student, config, output_path)
+                
+                # Generate certificate
+                self.generate_certificate_pdf(student, output_path)
                 generated_files.append(output_path)
+                
             except Exception as e:
                 logger.error(f"Failed to generate certificate for student {i+1}: {e}")
                 continue
+        
         return generated_files
 
 app = FastAPI()

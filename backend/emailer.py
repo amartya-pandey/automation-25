@@ -4,10 +4,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from typing import List, Dict
-import logging
+from backend.logger import get_logger
 from models import EmailConfig
 
-logger = logging.getLogger(__name__)
+# I'm importing the logger so can use it throughout this file.
+logger = get_logger()
 
 class EmailSender:
     def __init__(self, config: EmailConfig):
