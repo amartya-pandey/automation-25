@@ -92,16 +92,6 @@ This project recommends [uv](https://github.com/astral-sh/uv) for creating virtu
 - Create a new environment: `uv venv`
 - Install dependencies: `uv pip install -r requirements.txt`
 
-## Troubleshooting
-- If the certificate preview does not render, check your template PDF path and validity.
-- For font issues, ensure the specified fonts are available on your system.
-- For email issues, verify credentials and SMTP settings.
-
-## License
-MIT
-
-## Support
-Open an issue or contact the maintainers via GitHub.
 
 ## Custom Font Support: Frunchy Sage
 
@@ -158,3 +148,20 @@ Run the test script to verify Frunchy Sage support:
 ```bash
 python test_frunchy_sage.py
 ```
+
+## Contributors
+- **[Amartya Pandey](https://github.com/amartya-pandey)**: Developed FastAPI backend and SMTP based based mailing system.
+- **[Saksham Sharma](https://github.com/SakshamSharma2005)**: Developed certificate editing system and debugging.
+
+
+
+## Troubleshooting
+- If the certificate preview does not render, check your template PDF path and validity.
+- For font issues, ensure the specified fonts are available on your system.
+- For email issues, verify credentials and SMTP settings.
+
+## License
+MIT
+
+## Support
+Open an issue or contact the maintainers via GitHub.
