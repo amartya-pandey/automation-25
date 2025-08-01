@@ -5,11 +5,11 @@ import os
 from typing import Optional, Dict
 from datetime import datetime
 import uuid
-from models import ProcessingStatus, EmailConfig
-from certificate import CertificateGenerator
-from emailer import EmailSender
-from config import UPLOAD_DIR
-from utils import validate_excel_file, read_and_save_file, http_error
+from backend.models import ProcessingStatus, EmailConfig
+from backend.certificate import CertificateGenerator
+from backend.emailer import EmailSender
+from backend.config import UPLOAD_DIR
+from backend.utils import validate_excel_file, read_and_save_file, http_error
 import dotenv
 from backend.logger import get_logger
 
@@ -153,7 +153,7 @@ async def process_certificates_background(task_id: str, email_config: EmailConfi
         
         # Generate certificates using configuration
         processing_status[task_id].message = "Generating certificates with custom layout..."
-        certificate_paths = cert_generator.generate_all_certificates_with_config(students)
+        certificate_paths = cert_generator.generate_all_certificates(students)
         
         # Update progress
         processing_status[task_id].processed_count = len(certificate_paths)

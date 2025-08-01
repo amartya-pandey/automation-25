@@ -29,7 +29,7 @@
     "size": 50,
     "color": "#000000"
   },
-  "template_path": "template.pdf",
+  "template_path": "Certificate.pdf",
   "custom_fonts": [
     {
       "name": "FrunchySage",

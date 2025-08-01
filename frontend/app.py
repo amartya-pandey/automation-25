@@ -35,8 +35,8 @@ def start_processing(task_id, email_config):
     try:
         data = {
             "task_id": task_id,
-            "sender_email": email_config["sender_email"],
-            "sender_password": email_config["sender_password"],
+            "sender_email_in": email_config["sender_email"],
+            "sender_password_in": email_config["sender_password"],
             "email_subject": email_config["email_subject"],
             "email_body": email_config["email_body"],
             "smtp_server": email_config["smtp_server"],

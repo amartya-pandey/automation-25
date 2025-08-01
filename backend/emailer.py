@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from typing import List, Dict
 from backend.logger import get_logger
-from models import EmailConfig
+from backend.models import EmailConfig
 
 # I'm importing the logger so can use it throughout this file.
 logger = get_logger()
