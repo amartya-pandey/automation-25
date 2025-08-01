@@ -151,9 +151,9 @@ async def process_certificates_background(task_id: str, email_config: EmailConfi
         students = cert_generator.parse_excel_csv(excel_path)
         processing_status[task_id].total_count = len(students)
         
-        # Generate certificates
-        processing_status[task_id].message = "Generating certificates..."
-        certificate_paths = cert_generator.generate_all_certificates(students)
+        # Generate certificates using configuration
+        processing_status[task_id].message = "Generating certificates with custom layout..."
+        certificate_paths = cert_generator.generate_all_certificates_with_config(students)
         
         # Update progress
         processing_status[task_id].processed_count = len(certificate_paths)

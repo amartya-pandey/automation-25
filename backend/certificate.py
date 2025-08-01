@@ -6,11 +6,15 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
-from typing import Dict, List
+from typing import Dict, List, Optional
 from fastapi import FastAPI
 from reportlab.lib import colors
 import datetime
 from backend.logger import get_logger
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from pdfrw import PdfReader, PdfWriter, PageMerge
+import json
 
 # I'm importing the logger so can use it throughout this file.
 logger = get_logger()
@@ -20,6 +24,17 @@ class CertificateGenerator:
         self.template_path = template_path
         self.output_dir = "../generated_certificates"
         os.makedirs(self.output_dir, exist_ok=True)
+        # Register custom fonts from config
+        config_path = os.path.join(os.path.dirname(__file__), 'certificate_config.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            for font in config.get('custom_fonts', []):
+                try:
+                    font_file = os.path.join(os.path.dirname(__file__), font['file'])
+                    pdfmetrics.registerFont(TTFont(font['name'], font_file))
+                except Exception as e:
+                    logger.error(f"Failed to register font {font['name']}: {e}")
     
     def parse_excel_csv(self, excel_path: str) -> List[Dict]:
         """Parse Excel or CSV file and return list of student records."""
@@ -187,5 +202,116 @@ class CertificateGenerator:
                 continue
         
         return generated_files
+    
+    def generate_all_certificates_with_config(self, students: List[Dict]) -> List[str]:
+        """Generate certificates for all students using configuration-based layout."""
+        generated_files = []
+        
+        for i, student in enumerate(students):
+            try:
+                # Create filename
+                safe_name = "".join(c for c in student['name'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                filename = f"certificate_{safe_name}_{i+1}.pdf"
+                output_path = os.path.join(self.output_dir, filename)
+                
+                # Generate certificate using config
+                self.generate_certificate_with_config(student, output_path)
+                generated_files.append(output_path)
+                
+            except Exception as e:
+                logger.error(f"Failed to generate config-based certificate for student {i+1}: {e}")
+                continue
+        
+        return generated_files
+    
+    def generate_certificate_with_config(self, student_data: Dict, output_path: str, config_path: Optional[str] = None) -> str:
+        """Generate a certificate PDF using the configuration file for layout and styling."""
+        try:
+            # Load configuration
+            if config_path is None:
+                config_path = os.path.join(os.path.dirname(__file__), 'certificate_config.json')
+            
+            if not os.path.exists(config_path):
+                logger.warning(f"Config file not found: {config_path}, falling back to default method")
+                return self.generate_certificate_pdf(student_data, output_path)
+            
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            
+            # Create canvas for PDF
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import A4
+            from pdfrw import PdfReader, PdfWriter, PageMerge
+            
+            temp_pdf_path = output_path + ".temp.pdf"
+            c = canvas.Canvas(temp_pdf_path, pagesize=A4)
+            
+            # Register any additional custom fonts (they're already registered in __init__)
+            for font in config.get('custom_fonts', []):
+                try:
+                    font_file = os.path.join(os.path.dirname(__file__), font['file'])
+                    if os.path.exists(font_file):
+                        pdfmetrics.registerFont(TTFont(font['name'], font_file))
+                except Exception as e:
+                    logger.warning(f"Could not register font {font['name']}: {e}")
+            
+            # Draw title if configured
+            title_cfg = config.get("title", {})
+            if title_cfg.get("x") and title_cfg.get("y"):
+                try:
+                    c.setFont(title_cfg.get("font", "Helvetica-Bold"), title_cfg.get("size", 24))
+                except:
+                    logger.warning(f"Font {title_cfg.get('font')} not available, using Helvetica-Bold")
+                    c.setFont("Helvetica-Bold", title_cfg.get("size", 24))
+                
+                c.setFillColor(title_cfg.get("color", "#000000"))
+                c.drawCentredString(title_cfg.get("x", 300), title_cfg.get("y", 500), "CERTIFICATE OF COMPLETION")
+            
+            # Draw each configured field
+            fields_config = config.get("fields", {})
+            for field_name, field_cfg in fields_config.items():
+                value = student_data.get(field_name, "")
+                if value and field_cfg.get("x") and field_cfg.get("y"):
+                    try:
+                        c.setFont(field_cfg.get("font", "Helvetica"), field_cfg.get("size", 14))
+                    except:
+                        logger.warning(f"Font {field_cfg.get('font')} not available, using Helvetica")
+                        c.setFont("Helvetica", field_cfg.get("size", 14))
+                    
+                    c.setFillColor(field_cfg.get("color", "#000000"))
+                    c.drawCentredString(field_cfg.get("x", 300), field_cfg.get("y", 400), str(value))
+            
+            c.save()
+            
+            # Try to merge with template if available
+            template_path = config.get("template_path", "template.pdf")
+            if template_path and os.path.exists(template_path):
+                try:
+                    template_pdf = PdfReader(template_path)
+                    overlay_pdf = PdfReader(temp_pdf_path)
+                    
+                    if (hasattr(template_pdf, "pages") and isinstance(template_pdf.pages, list) and template_pdf.pages and
+                        hasattr(overlay_pdf, "pages") and isinstance(overlay_pdf.pages, list) and overlay_pdf.pages):
+                        
+                        for page, overlay_page in zip(template_pdf.pages, overlay_pdf.pages):
+                            merger = PageMerge(page)
+                            merger.add(overlay_page).render()
+                        
+                        PdfWriter(output_path, trailer=template_pdf).write()
+                        os.remove(temp_pdf_path)
+                    else:
+                        os.rename(temp_pdf_path, output_path)
+                except Exception as merge_err:
+                    logger.warning(f"Template merge failed: {merge_err}, using overlay only")
+                    os.rename(temp_pdf_path, output_path)
+            else:
+                os.rename(temp_pdf_path, output_path)
+            
+            logger.info(f"Config-based certificate generated for {student_data['name']}")
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"Error generating config-based certificate for {student_data['name']}: {e}")
+            raise
 
 app = FastAPI()

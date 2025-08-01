@@ -102,3 +102,59 @@ MIT
 
 ## Support
 Open an issue or contact the maintainers via GitHub.
+
+## Custom Font Support: Frunchy Sage
+
+Auto-Certy now supports the **Frunchy Sage** font for creating stylized certificates! 
+
+### Features
+- **Built-in Font**: Frunchy Sage TTF font is included in the project
+- **Visual Editor**: Select Frunchy Sage from the font dropdown in the certificate config editor
+- **Real-time Preview**: See how your certificates look with the custom font instantly
+- **Configuration**: Font settings are stored in `certificate_config.json`
+
+### How to Use Frunchy Sage
+
+1. **Start the Config Editor**:
+   ```bash
+   cd backend
+   streamlit run edit_certificate_config.py
+   ```
+
+2. **Select Frunchy Sage Font**:
+   - In the config editor UI, choose "FrunchySage" from any font dropdown
+   - Adjust font size, color, and position as needed
+   - See real-time preview in the sidebar
+
+3. **Save Configuration**:
+   - Click "Save Config" to store your settings
+   - The font will be used for all future certificate generation
+
+4. **Generate Certificates**:
+   - Use the standard certificate generation process
+   - Certificates will automatically use your Frunchy Sage font settings
+
+### Font Configuration Example
+```json
+{
+  "fields": {
+    "name": {
+      "font": "FrunchySage",
+      "size": 36,
+      "color": "#2E4057"
+    }
+  },
+  "custom_fonts": [
+    {
+      "name": "FrunchySage", 
+      "file": "FrunchySage.ttf"
+    }
+  ]
+}
+```
+
+### Test Your Setup
+Run the test script to verify Frunchy Sage support:
+```bash
+python test_frunchy_sage.py
+```

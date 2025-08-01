@@ -29,5 +29,11 @@
     "size": 24,
     "color": "#000000"
   },
-  "template_path": "template.pdf"
+  "template_path": "template.pdf",
+  "custom_fonts": [
+    {
+      "name": "FrunchySage",
+      "file": "FrunchySage.ttf"
+    }
+  ]
 }
